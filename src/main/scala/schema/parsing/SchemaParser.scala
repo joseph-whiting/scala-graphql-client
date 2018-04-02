@@ -18,5 +18,21 @@ abstract class Parser {
 }
 
 class SchemaParser extends Parser {
-  def parse(inputString: String): Seq[DefinedType] = Seq(DefinedType("Character", Seq(Field("name", Required(GraphQLString)), Field("appearsIn", Required(GraphQLList(GraphQLString))))))
+  val typePattern = """(type )(.*) \{[\s]*((?:(?!type)[\s\S])*)\}""".r
+  val fieldPattern = """([\S]*):[\s]*([\S]*)""".r
+  val requiredFieldTypePattern = """([\S]*)!""".r
+  val listFieldTypePattern = """\[(.*)\]""".r
+  def parse(inputString: String): Seq[DefinedType] = typePattern.findAllIn(inputString).map(parseType _).toSeq
+  def parseType(typeString: String): DefinedType = typeString match {
+    case typePattern(_, name, fields) => DefinedType(name, parseFields(fields))
+  }
+  def parseFields(fieldsString: String): Seq[Field] = fieldPattern.findAllIn(fieldsString).map(parseField _).toSeq
+  def parseField(fieldString: String): Field = fieldString match {
+    case fieldPattern(name, typeString) => Field(name, parseFieldType(typeString))
+  }
+  def parseFieldType(fieldTypeString: String): FieldType = fieldTypeString match {
+    case requiredFieldTypePattern(innerTypeString) => Required(parseFieldType(innerTypeString))
+    case listFieldTypePattern(innerTypeString) => GraphQLList(parseFieldType(innerTypeString))
+    case "String" => GraphQLString
+  }
 }
