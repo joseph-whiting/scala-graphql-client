@@ -12,7 +12,6 @@ object WithAge {
 
 class Character {}
 
-
 trait Field
 
 trait Name extends Field {
@@ -38,4 +37,40 @@ object Test {
   lukeWithAgeAndName.age = 28
   val age2 = lukeWithAgeAndName.age
   val name2 = lukeWithAgeAndName.name
+
+  object Client {
+    def send[A](query: Query[A]) = query.parseResponse("")
+  }
+
+  abstract class AbstractQuery[A] {
+    def generateQuery(): String
+    def parseResponse(response: String): A
+  }
+  abstract class AbstractRootQuery[A] extends AbstractQuery[A] {
+    def character[B](inner: () => B): AbstractQuery[B]
+  }
+  class Query[A](inner: AbstractQuery[A]) extends AbstractQuery[A] {
+    def generateQuery() = inner.generateQuery()
+    def parseResponse(response: String) = inner.parseResponse(response)
+  }
+
+  class NameField[A](inner: AbstractQuery[A]) extends AbstractQuery[WithName.TypedWithName[A]] { // put a ctr arg
+    def generateQuery() = "name"
+    def parseResponse(response: String) = inner.parseResponse(response) :: WithName // search for name in keys
+  }
+
+  class EmptyQuery extends AbstractQuery[Character] {
+    def generateQuery() = ""
+    def parseResponse(response: String) = new Character()
+  }
+
+  def query[A](inner: AbstractQuery[A]) = new Query(inner)
+  def character[A](inner: AbstractQuery[A]) = new Query(inner)
+  def name = new NameField(new EmptyQuery())
+
+  Client.send(query {
+                character {
+                  name
+                }
+              }).name
 }
