@@ -1,32 +1,53 @@
 package com.example.graphqlclient
 
-class Query[A] {
-  def fields(
-    field1: Query[A] => Query[A] with WithField,
-  ) = field1(this)
-}
+object Client {
+  type Request[T] = String => TypedWithField[T]
 
-class Character {}
+  type RequestDeclaration[T] = GraphQLResponse => TypedWithField[T]
 
-class CharacterQuery extends Query[Character] {
-  def withName(): CharacterQuery with WithName = CharacterWithName
-}
+  class GraphQLResponse {}
 
-object CharacterWithName extends CharacterQuery with WithName {
-  def name = "Luke"
-}
+  def character[T](declaration: RequestDeclaration[T]): Request[T] = { responseJSON => {
+                                                                        declaration(new GraphQLResponse())
+                                                                      }
+ 
+  }
+  implicit val characterFactory = new CharacterFactory()
 
-trait WithField
-trait WithName extends WithField {
-  def name: String
-}
+  def fields[T](field1: Field[T])(implicit tFactory: Factory[T]): RequestDeclaration[T] = {response =>
+    field1(response, tFactory.makeNew())
+  }
 
-trait WithAge extends WithField {
-  def age: Int
-}
+  abstract class Factory[T] {
+    def makeNew(): T
+  }
 
-object MyQuery extends CharacterQuery {}
+  class Character {}
+  class CharacterFactory extends Factory[Character] {
+    def makeNew() = new Character
+  }
 
-object User {
-  val name = MyQuery.withName().name
+  type Field[T] = (GraphQLResponse, T) => TypedWithField[T]
+
+  def name[T](eav: GraphQLResponse, typed: T): WithName.TypedWithName[T] = typed :: WithName
+
+  abstract trait WithField
+
+  trait WithName {
+    def name: String = "Luke Skywalker"
+  }
+
+  abstract class TypedWithField[T]
+
+  object WithName {
+    implicit def innerObject[T](outer: TypedWithName[T]): T = outer.inner
+    def ::[T](typed: T) = new TypedWithName[T](typed)
+    class TypedWithName[T] private[WithName](val inner: T) extends TypedWithField[T] with WithName
+  }
+
+  def getCharacterWithName() = character {
+    fields(
+      name[Character]
+    )
+  }
 }
