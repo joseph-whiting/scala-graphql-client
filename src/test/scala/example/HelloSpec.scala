@@ -1,12 +1,13 @@
 package scalagraphqlclient.schema.parsing
 
+import scala.io.Source
 import org.scalatest._
 
 class SchemaParserSpec extends FunSpec {
   describe("The schema parser") {
     val parser = new SchemaParser()
-    describe("for a simple Star Wars character example") {
-      val outputTypes = parser.parse(
+    describe("for a simple Star Wars character example with only one type") {
+      val outputDefinitions = parser.parse(
         """type Character {""" +
         """  name: String!""" +
         """  appearsIn: [String]!""" +
@@ -15,31 +16,49 @@ class SchemaParserSpec extends FunSpec {
 
       it("should get the correct name for the top level type") {
         assertResult("Character") {
-          outputTypes(0).name
+          outputDefinitions(0).definedType.name
         }
       }
 
       it("should get the right number of fields") {
         assertResult(2) {
-          outputTypes(0).fields.length
+          outputDefinitions(0).fields.length
         }
       }
 
       it("should get the names of the fields correctly") {
         assertResult("name") {
-          outputTypes(0).fields(0).fieldName
+          outputDefinitions(0).fields(0).fieldName
         }
         assertResult("appearsIn") {
-          outputTypes(0).fields(1).fieldName
+          outputDefinitions(0).fields(1).fieldName
         }
       }
 
       it("should get the field types correctly") {
         assertResult(Required(GraphQLString)) {
-          outputTypes(0).fields(0).fieldType
+          outputDefinitions(0).fields(0).fieldType
         }
         assertResult(Required(GraphQLList(GraphQLString))) {
-          outputTypes(0).fields(1).fieldType
+          outputDefinitions(0).fields(1).fieldType
+        }
+      }
+    }
+
+    describe("for a more complicated Star Wars example with multiple type definitions") {
+      val schemaString = Source.fromURL(getClass.getResource("/CharactersAndEpisodes.graphql")).mkString
+      val outputDefinitions = parser.parse(schemaString)
+      it("should extract the correct number of types") {
+        assertResult(2) {
+          outputDefinitions.length
+        }
+      }
+      it("should extract the correct type names") {
+        assertResult("Character") {
+          outputDefinitions(0).definedType.name
+        }
+        assertResult("Episode") {
+          outputDefinitions(1).definedType.name
         }
       }
     }
