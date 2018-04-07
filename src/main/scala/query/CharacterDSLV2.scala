@@ -75,11 +75,11 @@ object Test {
   }
 
   def query[A](inner: AbstractQuery[A]) = new Query(inner)
-  def character[A, B](field1: EmptyQuery => AbstractQuery[A], field2: AbstractQuery[A] => AbstractQuery[B]) = new CharacterQuery(field1, field2)
+  def character[A, B](field1: EmptyQuery => AbstractQuery[A])(field2: AbstractQuery[A] => AbstractQuery[B]) = new CharacterQuery(field1, field2)
   def name(query: EmptyQuery) = new NameField(query)
   def age[A](query: AbstractQuery[A]) = new AgeField(query)
 
   Client.send(query {
-                character(name, age[WithName.TypedWithName[Character]])
+                character(name)(age)
               }).name
 }
