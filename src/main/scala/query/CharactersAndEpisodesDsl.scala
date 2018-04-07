@@ -45,9 +45,10 @@ object Client {
     class TypedWithName[T] private[WithName](val inner: T) extends TypedWithField[T] with WithName
   }
 
-  def getCharacterWithName() = character {
+  def getCharacterWithName = character {
     fields(
       name[Character]
     )
   }
+
 }
