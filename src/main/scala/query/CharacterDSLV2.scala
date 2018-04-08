@@ -59,9 +59,10 @@ object Test {
     def parseResponse(response: String): A = fields.parseResponse(response)
   }
 
-  class NameField[A](nextField: AbstractQuery[A]) extends AbstractQuery[WithName.TypedWithName[A]] {
+  class NameField[A](inner: AbstractQuery[A]) extends AbstractQuery[WithName.TypedWithName[A]] {
     def generateQuery() = "name"
-    def parseResponse(response: String) = nextField.parseResponse(response) :: WithName // search for name in keys
+    def parseResponse(response: String) = inner.parseResponse(response) :: WithName // search for name in keys
+    def age() = new AgeField(this)
   }
 
   class AgeField[A](nextField: AbstractQuery[A]) extends AbstractQuery[WithAge.TypedWithAge[A]] {
@@ -76,15 +77,14 @@ object Test {
 
   def query[A](inner: AbstractQuery[A]) = new Query(inner)
   def character[A]()(fields: AbstractQuery[A]) = new CharacterQuery(fields)
-  def name[A](nextField: AbstractQuery[A] =  new EmptyQuery()) = new NameField[A](nextField)
-  def age[A](nextField: AbstractQuery[A] = new EmptyQuery()) = new AgeField[A](nextField)
+  def name[A](inner: AbstractQuery[A] =  new EmptyQuery()) = new NameField[A](inner)
   def name: NameField[Character] = name()
-  def age: AgeField[Character] = age()
 
   Client.send(query {
                 character()(
-                  name(age)
+                  name
+                  age
                 )
-              }).name
+              }).age
 }
 
