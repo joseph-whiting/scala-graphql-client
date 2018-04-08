@@ -54,19 +54,19 @@ object Test {
     def parseResponse(response: String) = inner.parseResponse(response)
   }
 
-  class CharacterQuery[B, C](field1: EmptyQuery => AbstractQuery[B], field2: AbstractQuery[B] => AbstractQuery[C]) extends AbstractQuery[C] {
+  class CharacterQuery[A](fields: AbstractQuery[A]) extends AbstractQuery[A] {
     def generateQuery() = ""
-    def parseResponse(response: String): C = field2(field1(new EmptyQuery())).parseResponse(response)
+    def parseResponse(response: String): A = fields.parseResponse(response)
   }
 
-  class NameField[A](inner: AbstractQuery[A]) extends AbstractQuery[WithName.TypedWithName[A]] {
+  class NameField[A](nextField: AbstractQuery[A]) extends AbstractQuery[WithName.TypedWithName[A]] {
     def generateQuery() = "name"
-    def parseResponse(response: String) = inner.parseResponse(response) :: WithName // search for name in keys
+    def parseResponse(response: String) = nextField.parseResponse(response) :: WithName // search for name in keys
   }
 
-  class AgeField[A](inner: AbstractQuery[A]) extends AbstractQuery[WithAge.TypedWithAge[A]] {
+  class AgeField[A](nextField: AbstractQuery[A]) extends AbstractQuery[WithAge.TypedWithAge[A]] {
     def generateQuery() = "age"
-    def parseResponse(response: String) = inner.parseResponse(response) :: WithAge // search for age in keys
+    def parseResponse(response: String) = nextField.parseResponse(response) :: WithAge // search for age in keys
   }
 
   class EmptyQuery extends AbstractQuery[Character] {
@@ -75,11 +75,16 @@ object Test {
   }
 
   def query[A](inner: AbstractQuery[A]) = new Query(inner)
-  def character[A, B](field1: EmptyQuery => AbstractQuery[A])(field2: AbstractQuery[A] => AbstractQuery[B]) = new CharacterQuery(field1, field2)
-  def name(query: EmptyQuery) = new NameField(query)
-  def age[A](query: AbstractQuery[A]) = new AgeField(query)
+  def character[A]()(fields: AbstractQuery[A]) = new CharacterQuery(fields)
+  def name[A](nextField: AbstractQuery[A] =  new EmptyQuery()) = new NameField[A](nextField)
+  def age[A](nextField: AbstractQuery[A] = new EmptyQuery()) = new AgeField[A](nextField)
+  def name: NameField[Character] = name()
+  def age: AgeField[Character] = age()
 
   Client.send(query {
-                character(name)(age)
+                character()(
+                  name(age)
+                )
               }).name
 }
+
