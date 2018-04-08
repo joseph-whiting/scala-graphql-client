@@ -33,7 +33,7 @@ object Test {
     def send[A](query: Query[A]) = query.parseResponse("")
   }
 
-  abstract class AbstractQuery[A] {
+  abstract trait AbstractQuery[A] {
     def generateQuery(): String
     def parseResponse(response: String): A
   }
@@ -50,15 +50,26 @@ object Test {
     def parseResponse(response: String) = inner.parseResponse(response) :: new WithCharacters[A]()
   }
 
-  class NameField[A](inner: AbstractQuery[A]) extends AbstractQuery[WithName.TypedWithName[A]] {
-    def generateQuery() = "name"
-    def parseResponse(response: String) = inner.parseResponse(response) :: WithName // search for name in keys
-    def age() = new AgeField(this)
+  class CharacterFieldQuery[A, B](inner: AbstractQuery[A])(field: CharacterField[A, B]) extends AbstractQuery[B] {
+    def age() = new CharacterFieldQuery(this)(new AgeField[B]())
+    def name() = new CharacterFieldQuery(this)(new NameField[B]())
+    def generateQuery() = field.name // or something like that
+    def parseResponse(response: String) = field.addTrait(inner.parseResponse(response))
   }
 
-  class AgeField[A](nextField: AbstractQuery[A]) extends AbstractQuery[WithAge.TypedWithAge[A]] {
-    def generateQuery() = "age"
-    def parseResponse(response: String) = nextField.parseResponse(response) :: WithAge // search for age in keys
+  abstract class CharacterField[A, B] {
+    def name: String
+    def addTrait(innerParseResult: A): B
+  }
+
+  class NameField[A] extends CharacterField[A, WithName.TypedWithName[A]] {
+    def name = "name"
+    def addTrait(innerParseResult: A) = innerParseResult :: WithName
+  }
+
+  class AgeField[A] extends CharacterField[A, WithAge.TypedWithAge[A]] {
+    def name = "age"
+    def addTrait(innerParseResult: A) = innerParseResult :: WithAge
   }
 
   class EmptyQuery extends AbstractQuery[EmptyType] {
@@ -68,7 +79,8 @@ object Test {
 
   def query[A](inner: AbstractQuery[A]) = new Query(inner)
   def character[A]()(fields: AbstractQuery[A]) = new CharacterQuery(fields)(new EmptyQuery())
-  def name: NameField[EmptyType] = new NameField(new EmptyQuery())
+  def name = new CharacterFieldQuery(new EmptyQuery())(new NameField[EmptyType]())
+  def age = new CharacterFieldQuery(new EmptyQuery())(new AgeField[EmptyType]())
 
   Client.send(query {
                 character()(
