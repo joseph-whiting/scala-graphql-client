@@ -3,6 +3,9 @@ import scalagraphqlclient.schema.parsing._
 
 class DslGenerator {
   def generate(types: Seq[TypeDefinition]): String = """
+import scala.concurrent._
+import ExecutionContext.Implicits.global
+
 object WithName {
   implicit def innerObject[T](outer: TypedWithName[T]): T = outer.inner
   def ::[T](typed: T) = new TypedWithName[T](typed)
@@ -33,8 +36,9 @@ trait Age {
   var age: Integer = 23
 }
 
-  object Client {
-    def send[A](query: Query[A]) = query.parseResponse("")
+object Client {
+  def send[A](query: Query[A]) = Future {
+    query.parseResponse("")
   }
 
   abstract trait AbstractQuery[A] {
@@ -87,5 +91,6 @@ trait Age {
   def character[A]()(fields: AbstractCharacterFieldQuery[A]) = new CharacterQuery(fields)(new EmptyQuery())
   def name = new CharacterFieldQuery(new EmptyQuery())(new NameField[EmptyType]())
   def age = new CharacterFieldQuery(new EmptyQuery())(new AgeField[EmptyType]())
+  }
 """
 }
