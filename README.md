@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.org/joseph-whiting/scala-graphql-client.svg?branch=master)](https://travis-ci.org/joseph-whiting/scala-graphql-client)
 # scala-graphql-client
 sbt plugin for typesafe consumption of GraphQL APIs in Scala
 
