@@ -7,14 +7,17 @@ object Client {
 
   class GraphQLResponse {}
 
-  def character[T](declaration: RequestDeclaration[T]): Request[T] = { responseJSON => {
-                                                                        declaration(new GraphQLResponse())
-                                                                      }
- 
+  def character[T](declaration: RequestDeclaration[T]): Request[T] = {
+    responseJSON =>
+      {
+        declaration(new GraphQLResponse())
+      }
+
   }
   implicit val characterFactory = new CharacterFactory()
 
-  def fields[T](field1: Field[T])(implicit tFactory: Factory[T]): RequestDeclaration[T] = {response =>
+  def fields[T](field1: Field[T])(
+      implicit tFactory: Factory[T]): RequestDeclaration[T] = { response =>
     field1(response, tFactory.makeNew())
   }
 
@@ -29,7 +32,8 @@ object Client {
 
   type Field[T] = (GraphQLResponse, T) => TypedWithField[T]
 
-  def name[T](eav: GraphQLResponse, typed: T): WithName.TypedWithName[T] = typed :: WithName
+  def name[T](eav: GraphQLResponse, typed: T): WithName.TypedWithName[T] =
+    typed :: WithName
 
   abstract trait WithField
 
@@ -42,13 +46,13 @@ object Client {
   object WithName {
     implicit def innerObject[T](outer: TypedWithName[T]): T = outer.inner
     def ::[T](typed: T) = new TypedWithName[T](typed)
-    class TypedWithName[T] private[WithName](val inner: T) extends TypedWithField[T] with WithName
+    class TypedWithName[T] private[WithName] (val inner: T)
+        extends TypedWithField[T]
+        with WithName
   }
 
   def getCharacterWithName = character {
-    fields(
-      name[Character]
-    )
+    fields(name[Character])
   }
 
 }

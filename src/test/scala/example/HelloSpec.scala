@@ -9,9 +9,9 @@ class SchemaParserSpec extends FunSpec {
     describe("for a simple Star Wars character example with only one type") {
       val outputDefinitions = parser.parse(
         """type Character {""" +
-        """  name: String!""" +
-        """  appearsIn: [String]!""" +
-        """}"""
+          """  name: String!""" +
+          """  appearsIn: [String]!""" +
+          """}"""
       )
 
       it("should get the correct name for the top level type") {
@@ -45,8 +45,11 @@ class SchemaParserSpec extends FunSpec {
       }
     }
 
-    describe("for a more complicated Star Wars example with multiple type definitions") {
-      val schemaString = Source.fromURL(getClass.getResource("/CharactersAndEpisodes.graphql")).mkString
+    describe(
+      "for a more complicated Star Wars example with multiple type definitions") {
+      val schemaString = Source
+        .fromURL(getClass.getResource("/CharactersAndEpisodes.graphql"))
+        .mkString
       val outputDefinitions = parser.parse(schemaString)
       it("should extract the correct number of types") {
         assertResult(2) {

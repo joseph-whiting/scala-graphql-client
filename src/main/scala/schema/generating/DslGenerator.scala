@@ -2,95 +2,112 @@ package scalagraphqlclient.schema.generating
 import scalagraphqlclient.schema.parsing._
 
 class DslGenerator {
+  def generateTraitForField(field: Field, parent: TypeDefinition): String = {
+    val name: String = field.fieldName.toLowerCase()
+    val capitalName: String = field.fieldName.capitalize
+    field.fieldType match {
+      case graphQLType: GraphQLScalarType => {
+        val scalaType = graphQLType match {
+          case GraphQLInt => "Int"
+          case GraphQLString => "String"
+        }
+        val defaultValue = graphQLType match {
+          case GraphQLInt => "0"
+          case GraphQLString => "\"\""
+        }
+        s"""
+object With${capitalName} {
+  implicit def innerObject[T](outer: TypedWith${capitalName}[T]): T = outer.inner
+  def ::[T](typed: T) = new TypedWith${capitalName}[T](typed)
+  class TypedWith${capitalName}[T](val inner: T) extends ${capitalName}
+
+}
+trait ${capitalName} {
+  var ${name}: ${scalaType} = ${defaultValue}
+}
+class ${capitalName}Field[A] extends ${parent.definedType.name.capitalize}Field[A, With${capitalName}.TypedWith${capitalName}[A]] {
+    def name = "${name}"
+    def addTrait(innerParseResult: A) = innerParseResult :: With${capitalName}
+  }
+"""
+      }
+      case _: DefinedType => {
+        s"""
+class With${capitalName}[A] {
+  implicit def innerObject[T](outer: TypedWith${capitalName}[A, T]): T = outer.inner
+  def ::[T](typed: T) = new TypedWith${capitalName}[A, T](typed)
+}
+class TypedWith${capitalName}[A, T](val inner: T) extends ${capitalName}[A]
+trait ${capitalName}[A] {
+  var ${name}: Seq[A] = Seq()
+}
+"""
+      }
+    }
+  }
+  def generate(typeDefinition: TypeDefinition) = {
+    val name = typeDefinition.definedType.name.toLowerCase()
+    val capitalName = name.capitalize
+    val fieldTraits = typeDefinition.fields.map(generateTraitForField(_, typeDefinition)).mkString("\n")
+    val fieldMethods = typeDefinition.fields.map(_.fieldName)
+      .map(fieldName => s"  def ${fieldName}() = new ${capitalName}FieldQuery(this)(new ${fieldName.capitalize}Field[B]())")
+      .mkString("\n")
+    val globalFieldMethods = typeDefinition.fields.map(_.fieldName)
+      .map(fieldName => s"  def ${fieldName} = new ${capitalName}FieldQuery(new EmptyQuery())(new ${fieldName.capitalize}Field[EmptyType]())")
+      .mkString("\n")
+    s"""
+class ${capitalName}Query[A, B](fields: Abstract${capitalName}FieldQuery[A])(inner: AbstractQuery[B]) extends AbstractQuery[TypedWith${capitalName}[A, B]] {
+    def generateQuery() = ""
+    def parseResponse(response: String) = inner.parseResponse(response) :: new With${capitalName}[A]()
+  }
+class With${capitalName}[A] {
+  implicit def innerObject[B](outer: TypedWith${capitalName}[A, B]): B = outer.inner
+  def ::[B](typed: B) = new TypedWith${capitalName}[A, B](typed)
+}
+class TypedWith${capitalName}[A, B] (val inner: B) extends ${capitalName}[A]
+trait ${capitalName}[A] {
+  var ${name}: Seq[A] = Seq()
+}
+abstract class Abstract${capitalName}FieldQuery[A] extends AbstractQuery[A]
+
+class ${capitalName}FieldQuery[A, B](inner: AbstractQuery[A])(field: ${capitalName}Field[A, B]) extends AbstractCharacterFieldQuery[B] {
+${fieldMethods}
+  def generateQuery() = field.name // or something like that
+  def parseResponse(response: String) = field.addTrait(inner.parseResponse(response))
+}
+
+abstract class ${capitalName}Field[A, B] {
+  def name: String
+  def addTrait(innerParseResult: A): B
+}
+${fieldTraits}
+
+def ${name}[A]()(fields: Abstract${capitalName}FieldQuery[A]) = new ${capitalName}Query(fields)(new EmptyQuery())
+${globalFieldMethods}
+"""
+  }
   def generate(types: Seq[TypeDefinition]): String = """
 import scala.concurrent._
 import ExecutionContext.Implicits.global
-
-object WithName {
-  implicit def innerObject[T](outer: TypedWithName[T]): T = outer.inner
-  def ::[T](typed: T) = new TypedWithName[T](typed)
-  class TypedWithName[T] (val inner: T) extends Name
-}
-
-object WithAge {
-  implicit def innerObject[T](outer: TypedWithAge[T]): T = outer.inner
-  def ::[T](typed: T) = new TypedWithAge[T](typed)
-  class TypedWithAge[T] (val inner: T) extends Age
-}
-
-class WithCharacters[A] {
-  implicit def innerObject[B](outer: TypedWithCharacters[A, B]): B = outer.inner
-  def ::[B](typed: B) = new TypedWithCharacters[A, B](typed)
-}
-class TypedWithCharacters[A, B] (val inner: B) extends Characters[A]
 class EmptyType {}
-
-trait Characters[A] {
-  var characters: Seq[A] = Seq()
-}
-
-trait Name {
-  var name: String = "Luke"
-}
-trait Age {
-  var age: Integer = 23
-}
-
 object Client {
   def send[A](query: Query[A]) = Future {
     query.parseResponse("")
   }
+}
+abstract trait AbstractQuery[A] {
+  def generateQuery(): String
+  def parseResponse(response: String): A
+}
 
-  abstract trait AbstractQuery[A] {
-    def generateQuery(): String
-    def parseResponse(response: String): A
-  }
-  abstract class AbstractRootQuery[A] extends AbstractQuery[A] {
-    def character[B](inner: () => B): AbstractQuery[B]
-  }
-  class Query[A](inner: AbstractQuery[A]) extends AbstractQuery[A] {
-    def generateQuery() = inner.generateQuery()
-    def parseResponse(response: String) = inner.parseResponse(response)
-  }
-
-  class CharacterQuery[A, B](fields: AbstractCharacterFieldQuery[A])(inner: AbstractQuery[B]) extends AbstractQuery[TypedWithCharacters[A, B]] {
-    def generateQuery() = ""
-    def parseResponse(response: String) = inner.parseResponse(response) :: new WithCharacters[A]()
-  }
-
-  abstract class AbstractCharacterFieldQuery[A] extends AbstractQuery[A]
-
-  class CharacterFieldQuery[A, B](inner: AbstractQuery[A])(field: CharacterField[A, B]) extends AbstractCharacterFieldQuery[B] {
-    def age() = new CharacterFieldQuery(this)(new AgeField[B]())
-    def name() = new CharacterFieldQuery(this)(new NameField[B]())
-    def generateQuery() = field.name // or something like that
-    def parseResponse(response: String) = field.addTrait(inner.parseResponse(response))
-  }
-
-  abstract class CharacterField[A, B] {
-    def name: String
-    def addTrait(innerParseResult: A): B
-  }
-
-  class NameField[A] extends CharacterField[A, WithName.TypedWithName[A]] {
-    def name = "name"
-    def addTrait(innerParseResult: A) = innerParseResult :: WithName
-  }
-
-  class AgeField[A] extends CharacterField[A, WithAge.TypedWithAge[A]] {
-    def name = "age"
-    def addTrait(innerParseResult: A) = innerParseResult :: WithAge
-  }
-
-  class EmptyQuery extends AbstractQuery[EmptyType] {
-    def generateQuery() = ""
-    def parseResponse(response: String) = new EmptyType()
-  }
-
-  def query[A](inner: AbstractQuery[A]) = new Query(inner)
-  def character[A]()(fields: AbstractCharacterFieldQuery[A]) = new CharacterQuery(fields)(new EmptyQuery())
-  def name = new CharacterFieldQuery(new EmptyQuery())(new NameField[EmptyType]())
-  def age = new CharacterFieldQuery(new EmptyQuery())(new AgeField[EmptyType]())
-  }
-"""
+class Query[A](inner: AbstractQuery[A]) extends AbstractQuery[A] {
+  def generateQuery() = inner.generateQuery()
+  def parseResponse(response: String) = inner.parseResponse(response)
+}
+class EmptyQuery extends AbstractQuery[EmptyType] {
+  def generateQuery() = ""
+  def parseResponse(response: String) = new EmptyType()
+}
+def query[A](inner: AbstractQuery[A]) = new Query(inner)
+""" + types.map(generate).mkString("\n")
 }
