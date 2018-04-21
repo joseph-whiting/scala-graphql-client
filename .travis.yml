@@ -4,5 +4,5 @@ scala:
   - 2.12.4
 
 script:
-  - sbt scripted
   - sbt test
+  - sbt scripted
