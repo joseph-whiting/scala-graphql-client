@@ -16,3 +16,8 @@ lazy val root = (project in file(".")).
       "org.scala-lang" % "scala-compiler" % scalaVersion.value % "scala-tool"
     )
   )
+
+scriptedLaunchOpts := { scriptedLaunchOpts.value ++
+  Seq("-Xmx1024M", "-Dplugin.version=" + version.value)
+}
+scriptedBufferLog := false
