@@ -6,3 +6,5 @@ project/project/target/*
 src/sbt-test/*/*/target/*
 src/sbt-test/*/*/project/target/*
 src/sbt-test/*/*/project/project/target/*
+src/sbt-test/*/*/in-cache/*
+src/sbt-test/*/*/out-cache/*
