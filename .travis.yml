@@ -5,3 +5,4 @@ scala:
 
 script:
   - sbt scripted
+  - sbt test
