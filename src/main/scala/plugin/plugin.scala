@@ -1,5 +1,3 @@
-package scalagraphqlclient.plugin
-
 import sbt._
 import Keys._
 
