@@ -10,7 +10,7 @@ class DslGeneratorSpec extends FunSpec {
   describe("the DSL generator") {
     val tb = universe.runtimeMirror(getClass.getClassLoader).mkToolBox()
     val generator = new DslGenerator()
-    describe("for a basic character type with name and age") {
+    describe("for a basic character type with required name and age") {
       val schemaModel: Seq[TypeDefinition] = Seq(
         TypeDefinition(
           DefinedType("Character"),
@@ -21,23 +21,18 @@ class DslGeneratorSpec extends FunSpec {
         )
       )
       val generatedCode = generator.generate(schemaModel)
+      def assertAllowsUsage(usage: String) = assertCodeAllowsUsage(usage, generatedCode)
+      def assertDoesNotAllowUsage(usage: String) = assertCodeDoesNotAllowUsage(usage, generatedCode)
       it("should generate code that compiles") {
-        tb.compile(tb.parse(generatedCode))
-      }
+        try {
+          tb.compile(tb.parse(generatedCode))
+        } catch {
+          case _ => {
+            println(s"""Generated DSL code failed to compile:
 
-      def assertAllowsUsage(usage: String) = {
-        tb.compile(tb.parse(s"""
 ${generatedCode}
-import Client._
-object Test {
-   ${usage}
-}
-"""))
-      }
-
-      def assertDoesNotAllowUsage(usage: String) = {
-        assertThrows[ToolBoxError] {
-          assertAllowsUsage(usage)
+""")
+          }
         }
       }
 
@@ -94,6 +89,50 @@ response.map(_.character.map(_.name))
 response.map(_.character.map(_.age))
 """)
         }
+      }
+    }
+
+    describe("for a character type with required name, non-required age and a requied list of their favourite drinks") {
+      val schemaModel: Seq[TypeDefinition] = Seq(
+        TypeDefinition(
+          DefinedType("Character"),
+          Seq(
+            Field("name", Required(GraphQLString)),
+            Field("age", GraphQLInt),
+            Field("favourite_drinks", Required(GraphQLList(Required(GraphQLString))))
+          )
+        )
+      )
+      val generatedCode = generator.generate(schemaModel)
+      def assertAllowsUsage(usage: String) = assertCodeAllowsUsage(usage, generatedCode)
+      def assertDoesNotAllowUsage(usage: String) = assertCodeDoesNotAllowUsage(usage, generatedCode)
+      it("should generate code that compiles") {
+        try {
+          tb.compile(tb.parse(generatedCode))
+        } catch {
+          case _ => {
+            println(s"""Generated DSL code failed to compile:
+
+${generatedCode}
+""")
+          }
+        }
+      }
+    }
+
+    def assertCodeAllowsUsage(usage: String, generatedCode: String) = {
+      tb.compile(tb.parse(s"""
+${generatedCode}
+import Client._
+object Test {
+   ${usage}
+}
+"""))
+    }
+
+    def assertCodeDoesNotAllowUsage(usage: String, generatedCode: String) = {
+      assertThrows[ToolBoxError] {
+        assertCodeAllowsUsage(usage, generatedCode)
       }
     }
   }

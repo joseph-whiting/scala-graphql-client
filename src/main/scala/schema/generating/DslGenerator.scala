@@ -1,48 +1,76 @@
 package scalagraphqlclient.schema.generating
 import scalagraphqlclient.schema.parsing._
 
+abstract class InternalType
+abstract class InternalScalarType extends InternalType
+case object InternalString extends InternalScalarType
+case object InternalInt extends InternalScalarType
+case class InternalOption(inner: InternalType) extends InternalType
+case class InternalSeq(inner: InternalType) extends InternalType
+case class InternalDefinedType(name: String) extends InternalType
+
 class DslGenerator {
+  def convert(graphQLType: FieldType): InternalType = graphQLType match {
+    case Required(GraphQLString) => InternalString
+    case Required(GraphQLInt) => InternalInt
+    case Required(GraphQLList(inner: FieldType)) => InternalSeq(convert(inner))
+    case Required(DefinedType(name: String)) => InternalDefinedType(name)
+    case notRequired: GraphQLType => InternalOption(convert(Required(notRequired)))
+  }
+  def needsGenericTrait(internalType: InternalType): Boolean = internalType match {
+    case InternalOption(inner: InternalType) => needsGenericTrait(inner)
+    case InternalSeq(inner: InternalType) => needsGenericTrait(inner)
+    case _: InternalScalarType => false
+    case _ => true
+  }
+  def convertToScalaType(internalType: InternalType): String = internalType match {
+    case InternalInt => "Int"
+    case InternalString => "String"
+    case InternalSeq(inner: InternalType) => {
+      val innerName = convertToScalaType(inner)
+      s"Seq[${innerName}]"
+    }
+    case InternalOption(inner: InternalType) => {
+      val innerName = convertToScalaType(inner)
+      s"Option[${innerName}]"
+    }
+    case InternalDefinedType(_: String) => "A"
+  }
   def generateTraitForField(field: Field, parent: TypeDefinition): String = {
     val name: String = field.fieldName.toLowerCase()
     val capitalName: String = field.fieldName.capitalize
-    field.fieldType match {
-      case Required(graphQLType: GraphQLScalarType) => {
-        val scalaType = graphQLType match {
-          case GraphQLInt => "Int"
-          case GraphQLString => "String"
-        }
-        val defaultValue = graphQLType match {
-          case GraphQLInt => "0"
-          case GraphQLString => "\"\""
-        }
-        s"""
+    val internalType = convert(field.fieldType)
+    val scalaType: String = convertToScalaType(internalType)
+    if(needsGenericTrait(internalType: InternalType)) {
+      s"""
+class With${capitalName}[A] {
+  implicit def innerObject[T](outer: TypedWith${capitalName}[A, T]): T = outer.inner
+  def ::[T](typed: T) = new TypedWith${capitalName}[A, T](typed)
+}
+
+class TypedWith${capitalName}[A, T](val inner: T) extends ${capitalName}[A]
+
+trait ${capitalName}[A] {
+  var ${name}: ${scalaType} = _
+}
+"""
+    } else {
+      s"""
 object With${capitalName} {
   implicit def innerObject[T](outer: TypedWith${capitalName}[T]): T = outer.inner
   def ::[T](typed: T) = new TypedWith${capitalName}[T](typed)
   class TypedWith${capitalName}[T](val inner: T) extends ${capitalName}
+}
 
-}
 trait ${capitalName} {
-  var ${name}: ${scalaType} = ${defaultValue}
+  var ${name}: ${scalaType} = _
 }
+
 class ${capitalName}Field[A] extends ${parent.definedType.name.capitalize}Field[A, With${capitalName}.TypedWith${capitalName}[A]] {
     def name = "${name}"
     def addTrait(innerParseResult: A) = innerParseResult :: With${capitalName}
   }
 """
-      }
-      case _: DefinedType => {
-        s"""
-class With${capitalName}[A] {
-  implicit def innerObject[T](outer: TypedWith${capitalName}[A, T]): T = outer.inner
-  def ::[T](typed: T) = new TypedWith${capitalName}[A, T](typed)
-}
-class TypedWith${capitalName}[A, T](val inner: T) extends ${capitalName}[A]
-trait ${capitalName}[A] {
-  var ${name}: Seq[A] = Seq()
-}
-"""
-      }
     }
   }
   def generate(typeDefinition: TypeDefinition) = {
@@ -112,7 +140,6 @@ object Client {
   def query[A](inner: AbstractQuery[A]) = new Query(inner)
 
   class EmptyType {}
-
 """ + types.map(generate).mkString("\n") + """
 }
 """
