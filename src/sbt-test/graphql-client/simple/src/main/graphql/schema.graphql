@@ -1,8 +1,4 @@
 type Character {
   name: String!
-  appearsIn: [Episode]!
-}
-
-type Episode {
-  name: String!
+  age: Int!
 }

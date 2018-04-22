@@ -15,8 +15,8 @@ class DslGeneratorSpec extends FunSpec {
         TypeDefinition(
           DefinedType("Character"),
           Seq(
-            Field("name", GraphQLString),
-            Field("age", GraphQLInt)
+            Field("name", Required(GraphQLString)),
+            Field("age", Required(GraphQLInt))
           )
         )
       )

@@ -6,7 +6,7 @@ class DslGenerator {
     val name: String = field.fieldName.toLowerCase()
     val capitalName: String = field.fieldName.capitalize
     field.fieldType match {
-      case graphQLType: GraphQLScalarType => {
+      case Required(graphQLType: GraphQLScalarType) => {
         val scalaType = graphQLType match {
           case GraphQLInt => "Int"
           case GraphQLString => "String"
@@ -89,25 +89,31 @@ ${globalFieldMethods}
   def generate(types: Seq[TypeDefinition]): String = """
 import scala.concurrent._
 import ExecutionContext.Implicits.global
-class EmptyType {}
 object Client {
   def send[A](query: Query[A]) = Future {
     query.parseResponse("")
   }
-}
-abstract trait AbstractQuery[A] {
-  def generateQuery(): String
-  def parseResponse(response: String): A
-}
 
-class Query[A](inner: AbstractQuery[A]) extends AbstractQuery[A] {
-  def generateQuery() = inner.generateQuery()
-  def parseResponse(response: String) = inner.parseResponse(response)
+  abstract trait AbstractQuery[A] {
+    def generateQuery(): String
+    def parseResponse(response: String): A
+  }
+
+  class Query[A](inner: AbstractQuery[A]) extends AbstractQuery[A] {
+    def generateQuery() = inner.generateQuery()
+    def parseResponse(response: String) = inner.parseResponse(response)
+  }
+
+  class EmptyQuery extends AbstractQuery[EmptyType] {
+    def generateQuery() = ""
+    def parseResponse(response: String) = new EmptyType()
+  }
+
+  def query[A](inner: AbstractQuery[A]) = new Query(inner)
+
+  class EmptyType {}
+
+""" + types.map(generate).mkString("\n") + """
 }
-class EmptyQuery extends AbstractQuery[EmptyType] {
-  def generateQuery() = ""
-  def parseResponse(response: String) = new EmptyType()
-}
-def query[A](inner: AbstractQuery[A]) = new Query(inner)
-""" + types.map(generate).mkString("\n")
+"""
 }

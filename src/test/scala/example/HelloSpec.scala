@@ -10,7 +10,7 @@ class SchemaParserSpec extends FunSpec {
       val outputDefinitions = parser.parse(
         """type Character {""" +
           """  name: String!""" +
-          """  appearsIn: [String]!""" +
+          """  appearsIn: [Int]!""" +
           """}"""
       )
 
@@ -39,7 +39,7 @@ class SchemaParserSpec extends FunSpec {
         assertResult(Required(GraphQLString)) {
           outputDefinitions(0).fields(0).fieldType
         }
-        assertResult(Required(GraphQLList(GraphQLString))) {
+        assertResult(Required(GraphQLList(GraphQLInt))) {
           outputDefinitions(0).fields(1).fieldType
         }
       }
