@@ -1,22 +1,21 @@
 package scalagraphqlclient.schema.parsing
 
-case class Field(fieldName: String, fieldType: FieldType)
+case class Field(fieldName: String, fieldType: GraphQLType)
 
-abstract class FieldType
-case class Required(innerType: FieldType) extends FieldType
-case class GraphQLList(innerType: FieldType) extends FieldType
-
-abstract class GraphQLType extends FieldType
-case class DefinedType(name: String) extends GraphQLType
+abstract class GraphQLType
+case class Required(innerType: GraphQLType) extends GraphQLType
+case class GraphQLList(innerType: GraphQLType) extends GraphQLType
 abstract class GraphQLScalarType extends GraphQLType
 case object GraphQLString extends GraphQLScalarType
 case object GraphQLInt extends GraphQLScalarType
 case object GraphQLFloat extends GraphQLScalarType
 case object GraphQLID extends GraphQLScalarType
 case object GraphQLBoolean extends GraphQLScalarType
+case class DefinedType(name: String) extends GraphQLType
 
 case class TypeDefinition(definedType: DefinedType, fields: Seq[Field])
-abstract class Parser {
+
+abstract trait Parser {
   def parse(inputString: String): Seq[TypeDefinition]
 }
 
@@ -37,7 +36,7 @@ class SchemaParser extends Parser {
     case fieldPattern(name, typeString) =>
       Field(name, parseFieldType(typeString))
   }
-  def parseFieldType(fieldTypeString: String): FieldType =
+  def parseFieldType(fieldTypeString: String): GraphQLType =
     fieldTypeString match {
       case requiredFieldTypePattern(innerTypeString) =>
         Required(parseFieldType(innerTypeString))
