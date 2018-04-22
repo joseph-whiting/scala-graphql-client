@@ -4,6 +4,7 @@ import java.io.File
 import plugins._
 import scalagraphqlclient.schema.generating.DslGenerator
 import scalagraphqlclient.schema.parsing.SchemaParser
+import scalagraphqlclient.schema.converting.GraphQLtoInternalConverter
 
 object ScalaGraphQLClientPlugin extends AutoPlugin {
   override def requires = JvmPlugin
@@ -16,8 +17,9 @@ object ScalaGraphQLClientPlugin extends AutoPlugin {
       val dslGenerator = new DslGenerator()
       val schemaParser = new SchemaParser()
       val inputSchema = IO.read(inputFile)
-      val types = schemaParser.parse(inputSchema)
-      val dsl = dslGenerator.generate(types)
+      val graphQLTypes = schemaParser.parse(inputSchema)
+      val internalTypes = GraphQLtoInternalConverter.convert(graphQLTypes)
+      val dsl = dslGenerator.generate(internalTypes)
       IO.write(outputFile, "package graphqlclient\n".concat(dsl))
       Seq(outputFile)
     }.taskValue

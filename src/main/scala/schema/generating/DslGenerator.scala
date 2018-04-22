@@ -22,12 +22,11 @@ class DslGenerator {
     }
     case InternalDefinedType(_: String) => "A"
   }
-  def generateTraitForField(field: Field, parent: TypeDefinition): String = {
+  def generateTraitForField(field: InternalField, parent: InternalTypeDefinition): String = {
     val name: String = field.fieldName.toLowerCase()
     val capitalName: String = field.fieldName.capitalize
-    val internalType = GraphQLtoInternalConverter.convert(field.fieldType)
-    val scalaType: String = convertToScalaType(internalType)
-    if(needsGenericTrait(internalType: InternalType)) {
+    val scalaType: String = convertToScalaType(field.fieldType)
+    if(needsGenericTrait(field.fieldType)) {
       s"""
 class With${capitalName}[A] {
   implicit def innerObject[T](outer: TypedWith${capitalName}[A, T]): T = outer.inner
@@ -59,7 +58,7 @@ class ${capitalName}Field[A] extends ${parent.definedType.name.capitalize}Field[
 """
     }
   }
-  def generate(typeDefinition: TypeDefinition) = {
+  def generate(typeDefinition: InternalTypeDefinition) = {
     val name = typeDefinition.definedType.name.toLowerCase()
     val capitalName = name.capitalize
     val fieldTraits = typeDefinition.fields.map(generateTraitForField(_, typeDefinition)).mkString("\n")
@@ -100,7 +99,7 @@ def ${name}[A]()(fields: Abstract${capitalName}FieldQuery[A]) = new ${capitalNam
 ${globalFieldMethods}
 """
   }
-  def generate(types: Seq[TypeDefinition]): String = """
+  def generate(types: Seq[InternalTypeDefinition]): String = """
 import scala.concurrent._
 import ExecutionContext.Implicits.global
 object Client {

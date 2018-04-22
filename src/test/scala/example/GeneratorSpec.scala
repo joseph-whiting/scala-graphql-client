@@ -2,7 +2,7 @@ import scala.tools.reflect.ToolBox
 import scala.tools.reflect.ToolBoxError
 import scala.reflect.runtime.universe
 import scalagraphqlclient.schema.generating._
-import scalagraphqlclient.schema.parsing._
+import scalagraphqlclient.schema.converting._
 import scala.io.Source
 import org.scalatest._
 
@@ -11,15 +11,15 @@ class DslGeneratorSpec extends FunSpec {
     val tb = universe.runtimeMirror(getClass.getClassLoader).mkToolBox()
     val generator = new DslGenerator()
     describe("for a basic character type with required name and age") {
-      val schemaModel: Seq[TypeDefinition] = Seq(
-        TypeDefinition(
-          DefinedType("Character"),
+      val schemaModel: Seq[InternalTypeDefinition] = Seq(
+        InternalTypeDefinition(
+          InternalDefinedType("character"),
           Seq(
-            Field("name", Required(GraphQLString)),
-            Field("age", Required(GraphQLInt))
+            InternalField("name", InternalString),
+            InternalField("age", InternalInt)
           )
         )
-      )
+        )
       val generatedCode = generator.generate(schemaModel)
       def assertAllowsUsage(usage: String) = assertCodeAllowsUsage(usage, generatedCode)
       def assertDoesNotAllowUsage(usage: String) = assertCodeDoesNotAllowUsage(usage, generatedCode)
@@ -93,13 +93,13 @@ response.map(_.character.map(_.age))
     }
 
     describe("for a character type with required name, non-required age and a requied list of their favourite drinks") {
-      val schemaModel: Seq[TypeDefinition] = Seq(
-        TypeDefinition(
-          DefinedType("Character"),
+      val schemaModel: Seq[InternalTypeDefinition] = Seq(
+        InternalTypeDefinition(
+          InternalDefinedType("Character"),
           Seq(
-            Field("name", Required(GraphQLString)),
-            Field("age", GraphQLInt),
-            Field("favourite_drinks", Required(GraphQLList(Required(GraphQLString))))
+            InternalField("name", InternalString),
+            InternalField("age", InternalOption(InternalInt)),
+            InternalField("favourite_drinks", InternalSeq(InternalString))
           )
         )
       )
