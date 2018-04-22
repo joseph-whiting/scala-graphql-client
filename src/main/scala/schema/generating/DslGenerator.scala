@@ -23,8 +23,8 @@ class DslGenerator {
     case InternalDefinedType(_: String) => "A"
   }
   def generateTraitForField(field: InternalField, parent: InternalTypeDefinition): String = {
-    val name: String = field.fieldName.toLowerCase()
-    val capitalName: String = field.fieldName.capitalize
+    val name: String = field.fieldKey.toLowerCase()
+    val capitalName: String = field.fieldKey.capitalize
     val scalaType: String = convertToScalaType(field.fieldType)
     if(needsGenericTrait(field.fieldType)) {
       s"""

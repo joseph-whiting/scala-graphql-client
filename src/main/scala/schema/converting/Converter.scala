@@ -2,7 +2,7 @@ package scalagraphqlclient.schema.converting
 
 import scalagraphqlclient.schema.parsing._
 
-case class InternalField(fieldName: String, fieldType: InternalType)
+case class InternalField(fieldName: String, fieldType: InternalType, fieldKey: String)
 
 abstract class InternalType
 case class InternalOption(inner: InternalType) extends InternalType
@@ -21,9 +21,18 @@ abstract trait GraphQLtoInternalConverter {
 
 object GraphQLtoInternalConverter {
   def convert(typeDefinitions: Seq[TypeDefinition]): Seq[InternalTypeDefinition] = typeDefinitions.map(convert(_))
-  def convert(typeDefinition: TypeDefinition): InternalTypeDefinition = InternalTypeDefinition(convert(typeDefinition.definedType), typeDefinition.fields.map(convert(_)))
+
+  case class FieldsAndMap(fields: Seq[InternalField], map: Map[String, Int])
+
+  def convert(typeDefinition: TypeDefinition): InternalTypeDefinition = {
+    val fieldsWithMap = makeUniqueFields(typeDefinition.fields)
+    InternalTypeDefinition(convert(typeDefinition.definedType), fieldsWithMap.fields)
+  }
+
   def convert(definedType: DefinedType): InternalDefinedType = InternalDefinedType(definedType.name)
-  def convert(field: Field): InternalField = InternalField(field.fieldName, convert((field.fieldType)))
+
+  def convert(field: Field, key: String): InternalField = InternalField(field.fieldName, convert(field.fieldType), key)
+
   def convert(graphQLType: GraphQLType): InternalType = graphQLType match {
     case Required(GraphQLString) => InternalString
     case Required(GraphQLInt) => InternalInt
@@ -32,4 +41,19 @@ object GraphQLtoInternalConverter {
     case Required(DefinedType(name: String)) => InternalDefinedType(name)
     case notRequired: GraphQLType => InternalOption(convert(Required(notRequired)))
   }
+
+  def makeUniqueFields(fields: Seq[Field]) = {
+    fields.foldLeft(FieldsAndMap(Seq(), Map[String, Int]())){(fieldsAndMap: FieldsAndMap, graphQLField: Field) => fieldsAndMap match {
+        case FieldsAndMap(fields, currentMap) => {
+          val name: String = graphQLField.fieldName
+          val count: Int = currentMap.getOrElse(name, 0)
+          val nextCount: Int = count + 1
+          val fieldKey: String = s"name${nextCount}"
+          val field: InternalField = convert(graphQLField, fieldKey)
+          FieldsAndMap(fields :+ field, currentMap + (graphQLField.fieldName -> nextCount))
+        }
+    }
+    }
+  }
 }
+
