@@ -2,36 +2,66 @@ package scalagraphqlclient.schema.converting
 
 import scalagraphqlclient.schema.parsing._
 
-case class InternalField(fieldName: String, fieldType: InternalType, fieldKey: String)
+case class InternalFieldName(fieldName: String, fieldTypes: Set[InternalType])
+case class InternalFieldReference(fieldName: String, fieldType: InternalType) // could get a collision if there were a type with "of" in its name ?
 
-abstract class InternalType
-case class InternalOption(inner: InternalType) extends InternalType
-case class InternalSeq(inner: InternalType) extends InternalType
-abstract class InternalScalarType extends InternalType
-case object InternalString extends InternalScalarType
-case object InternalInt extends InternalScalarType
-case object InternalBoolean extends InternalScalarType
-case class InternalDefinedType(name: String) extends InternalType
+abstract class InternalType {
+  def description: String
+  def code: String
+}
+class InternalWrapperType(name: String, inner: InternalType) extends InternalType {
+  def description: String = s"${name}Of${inner.description}"
+  def code: String = s"${name}[${inner.code}]"
+}
+case class InternalOption(inner: InternalType) extends InternalWrapperType("Option", inner)
+case class InternalSeq(inner: InternalType) extends InternalWrapperType("Seq", inner)
+class InternalNonWrapperType(name: String) extends InternalType {
+  def description: String = name
+  def code: String = name
+}
+class InternalScalarType(name: String) extends InternalNonWrapperType(name)
+case object InternalString extends InternalScalarType("String")
+case object InternalInt extends InternalScalarType("Int")
+case object InternalBoolean extends InternalScalarType("Boolean")
+case class InternalDefinedType(name: String) extends InternalNonWrapperType(name)
 
-case class InternalTypeDefinition(definedType: InternalDefinedType, fields: Seq[InternalField])
+case class InternalTypeDefinition(definedType: InternalDefinedType, fields: Seq[InternalFieldReference])
+
+case class InternalSchemaModel(typeDefinitions: Seq[InternalTypeDefinition], fields: Seq[InternalFieldName])
 
 abstract trait GraphQLtoInternalConverter {
-  def convert(typeDefinitions: TypeDefinition): Seq[InternalTypeDefinition]
+  def convert(typeDefinitions: TypeDefinition): InternalSchemaModel
 }
 
 object GraphQLtoInternalConverter {
-  def convert(typeDefinitions: Seq[TypeDefinition]): Seq[InternalTypeDefinition] = typeDefinitions.map(convert(_))
+  def convert(typeDefinitions: Seq[TypeDefinition]): InternalSchemaModel = {
+    val internalTypeDefintions = getInternalTypes(typeDefinitions)
+    val fields = getFieldsByName(internalTypeDefintions.flatMap(_.fields))
+    InternalSchemaModel(internalTypeDefintions, fields)
+  }
 
-  case class FieldsAndMap(fields: Seq[InternalField], map: Map[String, Int])
+  def getInternalTypes(typeDefinitions: Seq[TypeDefinition]): Seq[InternalTypeDefinition] = typeDefinitions.map(convert(_))
+
 
   def convert(typeDefinition: TypeDefinition): InternalTypeDefinition = {
-    val fieldsWithMap = makeUniqueFields(typeDefinition.fields)
-    InternalTypeDefinition(convert(typeDefinition.definedType), fieldsWithMap.fields)
+    InternalTypeDefinition(convert(typeDefinition.definedType), typeDefinition.fields.map(convert(_)))
   }
 
   def convert(definedType: DefinedType): InternalDefinedType = InternalDefinedType(definedType.name)
 
-  def convert(field: Field, key: String): InternalField = InternalField(field.fieldName, convert(field.fieldType), key)
+  def convert(field: Field): InternalFieldReference = {
+    val converted = convert(field.fieldType)
+    InternalFieldReference(field.fieldName, converted)
+  }
+
+  def getFieldsByName(fields: Seq[InternalFieldReference]): Seq[InternalFieldName] = {
+    val fieldsByName = fields.groupBy(_.fieldName)
+    fieldsByName.toSeq.map(tuple => {
+      val (name, innerFields) = tuple
+      val fieldTypeDescriptions = innerFields.map(_.fieldType).toSet
+      InternalFieldName(name, fieldTypeDescriptions)
+    })
+  }
 
   def convert(graphQLType: GraphQLType): InternalType = graphQLType match {
     case Required(GraphQLString) => InternalString
@@ -41,19 +71,4 @@ object GraphQLtoInternalConverter {
     case Required(DefinedType(name: String)) => InternalDefinedType(name)
     case notRequired: GraphQLType => InternalOption(convert(Required(notRequired)))
   }
-
-  def makeUniqueFields(fields: Seq[Field]) = {
-    fields.foldLeft(FieldsAndMap(Seq(), Map[String, Int]())){(fieldsAndMap: FieldsAndMap, graphQLField: Field) => fieldsAndMap match {
-        case FieldsAndMap(fields, currentMap) => {
-          val name: String = graphQLField.fieldName
-          val count: Int = currentMap.getOrElse(name, 0)
-          val nextCount: Int = count + 1
-          val fieldKey: String = s"name${nextCount}"
-          val field: InternalField = convert(graphQLField, fieldKey)
-          FieldsAndMap(fields :+ field, currentMap + (graphQLField.fieldName -> nextCount))
-        }
-    }
-    }
-  }
 }
-
