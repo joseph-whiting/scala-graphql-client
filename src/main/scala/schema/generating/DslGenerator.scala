@@ -36,14 +36,14 @@ object Client {
 
   def query[A](inner: AbstractQuery[A]) = new Query(inner)
 
-  class FieldQuery[A, B](inner: AbstractQuery[A])(field: AbstractField[A, B]) extends AbstractQuery[B] {
+  class FieldQuery[TInner, TWithField](inner: AbstractQuery[TInner])(field: AbstractField[TInner, TWithField]) extends AbstractQuery[TWithField] {
     def generateQuery(): String = field.name // or something like that
-    def parseResponse(response: String): B = field.addTrait(inner.parseResponse(response))
+    def parseResponse(response: String): TWithField = field.addTrait(inner.parseResponse(response))
   }
 
-  abstract class AbstractField[A, B] {
+  abstract class AbstractField[TInner, TWithField] {
     def name: String
-    def addTrait(innerParseResult: A): B
+    def addTrait(innerParseResult: TInner): TWithField
   }
 }
 """
@@ -52,24 +52,25 @@ object Client {
   def generate(typeDefinition: InternalTypeDefinition) = {
     val name = typeDefinition.definedType.name.capitalize
     val fieldMethods = generateFieldMethods(typeDefinition.fields, name)
-    val lowerName = name.toLowerCase()
+    val lowerName = typeDefinition.definedType.name
     s"""
 object ${name} {
-    class ${name}Query[A, B](fields: Abstract${name}FieldQuery[A])(inner: AbstractQuery[B]) extends AbstractQuery[TypedWith${name}[A, B]] {
-      def generateQuery() = ""
-      def parseResponse(response: String) = inner.parseResponse(response) :: new With${name}[A]()
+    class With[TFieldData] {
+      implicit def innerObject[TInner](outer: TypedWith[TFieldData, TInner]): TInner  = outer.inner
+      def ::[TInner](typed: TInner) = new TypedWith[TFieldData, TInner](typed)
     }
-    class With${name}[A] {
-      implicit def innerObject[B](outer: TypedWith${name}[A, B]): B = outer.inner
-      def ::[B](typed: B) = new TypedWith${name}[A, B](typed)
+    class Field[TInner, TFieldData] extends AbstractField[TInner, TypedWith[TFieldData, TInner]] {
+      def name = "${lowerName}"
+      def addTrait(innerParseResult: TInner) = innerParseResult :: new With[TFieldData]()
     }
-    class TypedWith${name}[A, B] (val inner: B) extends ${name}[A]
-    trait ${name}[A] {
-      var ${lowerName}: Seq[A] = Seq()
+    trait FieldTrait[TFieldData] {
+      var character: TFieldData = _
     }
-    abstract class Abstract${name}FieldQuery[A] extends AbstractQuery[A]
+    class TypedWith[TFieldData, TInner](val inner: TInner) extends FieldTrait[TFieldData]
 
-    class ${name}FieldQuery[A, B](inner: AbstractQuery[A])(field: AbstractField[A, B]) extends FieldQuery(inner)(field) {
+    class QueryWith[TInner, TFieldData](val inner: AbstractQuery[TInner])(val field: Field[TInner, TFieldData]) extends FieldQuery(inner)(field)
+
+    trait ${name}FieldQuery[TInner, TWithField] extends AbstractQuery[TWithField] {
       ${fieldMethods}
     }
 }
@@ -80,7 +81,7 @@ object ${name} {
     val methodName = field.fieldName
     val fieldType = field.fieldType.code
     val fieldNameCapitalized = field.fieldName.capitalize
-    s"def ${methodName}() = new ${parentTypeName}.QueryWith(this)(new ${fieldNameCapitalized}FieldQuery(this)(new ${fieldNameCapitalized}.Field[B, ${fieldType}]()))"
+    s"def ${methodName}() = new ${fieldNameCapitalized}.QueryWith(this)(new ${fieldNameCapitalized}.Field[TWithField, ${fieldType}]())"
   }).mkString("\n")
 
   def generate(types: Seq[InternalTypeDefinition]): String = types.map(generate).mkString("\n")
@@ -95,23 +96,23 @@ object ${name} {
     yield s"implicit def ${name}As${fieldType.description}(queryWith: ${objectName}.QueryWith[EmptyType, AnyType]) = new ${objectName}.QueryWith(queryWith.inner)(queryWith)(new ${objectName}.Field[EmptyType, ${fieldType.code}])"
     s"""
 object ${objectName} {
-    class With[A] {
-      implicit def innerObject[B](outer: TypedWith[A, B]): B  = outer.inner
-      def ::[B](typed: B) = new TypedWith[A, B](typed)
+    class With[TFieldData] {
+      implicit def innerObject[TInner](outer: TypedWith[TFieldData, TInner]): TInner  = outer.inner
+      def ::[TInner](typed: TInner) = new TypedWith[TFieldData, TInner](typed)
     }
-    class TypedWith[A, B](val inner: B) extends FieldTrait[A]
-    trait FieldTrait[A] {
-      var ${name}: A = _
+    class TypedWith[TFieldData, TInner](val inner: TInner) extends FieldTrait[TFieldData]
+    trait FieldTrait[TFieldData] {
+      var ${name}: TFieldData = _
     }
 
-    class Field[A, B] extends AbstractField[A, TypedWith[B, A]] {
+    class Field[TInner, TFieldData] extends AbstractField[TInner, TypedWith[TFieldData, TInner]] {
       def name = "${name}"
-      def addTrait(innerParseResult: A) = innerParseResult :: new With[B]()
+      def addTrait(innerParseResult: TInner) = innerParseResult :: new With[TFieldData]()
     }
-    class QueryWith[A, B](val inner: AbstractQuery[A])(val field: Field[A, B]) extends FieldQuery[A, B](inner)(field)
+    class QueryWith[TInner, TFieldData](val inner: AbstractQuery[TInner])(val field: Field[TInner, TFieldData]) extends FieldQuery(inner)(field)
 }
 
-def ${field.fieldName} = new ${objectName}.QueryWith(new EmptyQuery())(new ${objectName}.Field[EmptyType, AnyType])
+def ${name} = new ${objectName} .QueryWith(new EmptyQuery())(new ${objectName}.Field[EmptyType, AnyType])
 """
   }
 }
