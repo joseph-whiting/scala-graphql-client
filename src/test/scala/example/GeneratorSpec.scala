@@ -5,30 +5,24 @@ import scalagraphqlclient.schema.generating._
 import scalagraphqlclient.schema.converting._
 import scala.io.Source
 import org.scalatest._
+import java.io._
 
 class DslGeneratorSpec extends FunSpec {
-  val stringFieldType = InternalString
-  val intFieldType = InternalInt
-  val optionOfInt = InternalOption(InternalInt)
-  val seqOfString = InternalSeq(InternalString)
   describe("the DSL generator") {
     val tb = universe.runtimeMirror(getClass.getClassLoader).mkToolBox()
     val generator = new DslGenerator()
     describe("for a basic character type with required name and age") {
-      val fields = Seq(
-        InternalFieldName("name", Set(stringFieldType)),
-        InternalFieldName("age", Set(intFieldType))
-      )
-      val types: Seq[InternalTypeDefinition] = Seq(
-        InternalTypeDefinition(
-          InternalDefinedType("character"),
-          Seq(
-            InternalFieldReference("name", stringFieldType),
-            InternalFieldReference("age", intFieldType)
-          )
+      val schemaModel = InternalSchemaModel(
+        Seq(
+          InternalObject("Query", "query", Seq(InternalField("character", "Character", InternalObjectType()))),
+          InternalObject("Character", "character", Seq(
+            InternalField("age", "Age", InternalScalarType("Int")),
+            InternalField("name", "Name", InternalScalarType("String"))
+          )),
+          InternalObject("Age", "age", Seq()),
+          InternalObject("Name", "name", Seq())
         )
       )
-      val schemaModel = new InternalSchemaModel(types, fields)
       val generatedCode = generator.generate(schemaModel)
       def assertAllowsUsage(usage: String) = assertCodeAllowsUsage(usage, generatedCode)
       def assertDoesNotAllowUsage(usage: String) = assertCodeDoesNotAllowUsage(usage, generatedCode)
@@ -53,33 +47,33 @@ ${generatedCode}
         it("should be able to send a basic query for character names") {
           assertAllowsUsage("""
 Client.send(query(
-  character()(
+  character(
     name
   )
 ))""")
         }
-        it("should be able to map the names out of a character name query") {
+        it("should be able to get the names out of a character name query") {
           assertAllowsUsage("""
 Client.send(query(
-  character()(
+  character(
      name
   )
-)).map(_.character.map(_.name))
+)).map(_.character.name)
 """)
         }
         it("should NOT be  able to map the ages out of a character name query") {
           assertDoesNotAllowUsage("""
 Client.send(query(
-  character()(
+  character(
      name
   )
-)).map(_.character.map(_.age))
+)).map(_.character.age)
 """)
         }
         it("should allow a more complex query for characters with name and age") {
           assertAllowsUsage("""
 Client.send(query(
-  character()(
+  character(
     name
     age
   )
@@ -90,36 +84,31 @@ Client.send(query(
         it("should allow name and age to be accessed on name and age query") {
           assertAllowsUsage("""
 val response = Client.send(query(
-  character()(
+  character(
     age
     name
   )
 ))
-response.map(_.character.map(_.name))
-response.map(_.character.map(_.age))
+response.map(_.character.name)
+response.map(_.character.age)
 """)
         }
       }
     }
 
     describe("for a character type with required name, non-required age and a requied list of their favourite drinks") {
-      val fields = Seq(
-        InternalFieldName("name", Set(stringFieldType)),
-        InternalFieldName("age", Set(optionOfInt)),
-        InternalFieldName("favouriteDrinks", Set(seqOfString))
-      )
       val schemaModel = InternalSchemaModel(
         Seq(
-          InternalTypeDefinition(
-            InternalDefinedType("Character"),
-            Seq(
-              InternalFieldReference("name", stringFieldType),
-              InternalFieldReference("age", optionOfInt),
-              InternalFieldReference("favouriteDrinks", seqOfString)
-            )
-          )
-        ),
-        fields
+          InternalObject("Query", "query", Seq(InternalField("character", "Character", InternalObjectType()))),
+          InternalObject("Character", "character", Seq(
+              InternalField("age", "Age", InternalWrappingType(InternalScalarType("Int"), "Option")),
+              InternalField("name", "Name", InternalScalarType("String")),
+              InternalField("favouriteDrinks", "FavouriteDrinks", InternalWrappingType(InternalScalarType("String"), "Seq"))
+          )),
+          InternalObject("Age", "age", Seq()),
+          InternalObject("Name", "name", Seq()),
+          InternalObject("FavouriteDrinks", "favouriteDrinks", Seq())
+        )
       )
       val generatedCode = generator.generate(schemaModel)
       def assertAllowsUsage(usage: String) = assertCodeAllowsUsage(usage, generatedCode)
@@ -141,22 +130,22 @@ ${generatedCode}
       it("should allow access to the age through an option") {
         assertAllowsUsage("""
 val response = Client.send(query(
-  character()(
+  character(
     age
   )
 ))
-val ages: Future[Seq[Option[Int]]] = response.map(_.character.map(_.age))
+val ages: Future[Option[Int]] = response.map(_.character.age)
 """)
       }
 
       it("should allow access to the favourite drinks through a sequence") {
         assertAllowsUsage("""
 val response = Client.send(query(
-  character()(
-    favourite_drinks
+  character(
+    favouriteDrinks
   )
 ))
-val favouriteDrinks: Future[Seq[Seq[String]]] = response.map(_.character.map(_.favourite_drinks))
+val favouriteDrinksResult: Future[Seq[String]] = response.map(_.character.favouriteDrinks)
 """)
       }
     }

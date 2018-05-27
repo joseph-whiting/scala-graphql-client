@@ -16,16 +16,6 @@ class ConverterSpec extends FunSpec {
         )
       )
       describe("the output model") {
-        val output: InternalSchemaModel = GraphQLtoInternalConverter.convert(graphQLModel)
-        it("should have the name field as a required string") {
-          assert(output.typeDefinitions(0).fields(0).fieldType == InternalString)
-        }
-        it("should have the age field as an optional int") {
-          assert(output.typeDefinitions(0).fields(1).fieldType == InternalOption(InternalInt))
-        }
-        it("should have the favourite drinks fields as a sequence of strings") {
-          assert(output.typeDefinitions(0).fields(2).fieldType == InternalSeq(InternalString))
-        }
       }
     }
   }
